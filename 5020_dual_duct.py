@@ -1,6 +1,8 @@
 import numpy as np
 import solid2 as s
 
+_FN = 10
+
 
 def chained_hull(pieces):
     hulls = list()
@@ -31,22 +33,14 @@ def section(width, heigth, exponent, steps, basic_size=1):
     return piece
 
 
-def make_left_tubbing():
-    x1 = 18.25 - 2 * outer_width
-    y1 = 11.25 - 2 * outer_width
+def transition(p1, pT, p_t, t):
+    return [p_t(p1[i], pT[i], t)[i] for i in range(len(p1))]
 
-    x0_ = x0 + outer_width
-    y0_ = y0 + outer_width
-    x1_ = x1 + outer_width
-    y1_ = y1 + outer_width
 
-    pos1 = lambda t: [
-        0,
-        -13.5 * np.cos(np.pi / 2 * t**1.75),
-        10.75 * np.sin(np.pi / 2 * t**1.35),
-    ]
-    rot1 = lambda t: [-85 * t**2, 1.5 * t**2.5, 10 * t**2.5]
-    union_block = s.translate([-15, -25, -2.5])(  # block
+def make_tubbing(
+    pos1, posT, pos_t, rot1, rotT, rot_t, x0, x0_, y0, y0_, x1, x1_, y1, y1_, steps
+):
+    union_block = s.translate([-15, -10, -2.5])(  # block
         s.hull()(
             s.translate([0, 6.5, 2.5])(s.cube([15, 14.5, 10], center=False)),
             s.translate([0, 2, 2])(
@@ -54,39 +48,18 @@ def make_left_tubbing():
             ),
         )
     )
-    outer = s.union()(
-        chained_hull(
-            [
-                s.translate(pos1(t))(
-                    s.rotate(rot1(t))(
-                        s.translate([-4.5 * t, 0, 0])(
-                            section(
-                                x0_ * (1 - t) + x1_ * t,
-                                y0_ * (1 - t) + y1_ * t,
-                                1.7 + 8 * (1 - t) ** 4,
-                                steps,
-                                1,
-                            )
-                        )
-                    )
-                )
-                for t in map(lambda x: x / steps, range(steps + 1))
-            ]
-        ),
-        union_block,
-    )
-
-    inner = chained_hull(
+    exponent = lambda t: 3
+    tube = chained_hull(
         [
-            s.translate(pos1(t))(
-                s.rotate(rot1(t))(
-                    s.translate([-4.5 * t, 0, 0])(
+            (
+                s.translate(transition(pos1, posT, pos_t, t))(
+                    s.rotate(transition(rot1, rotT, rot_t, t))(
                         section(
-                            x0 * (1 - t) + x1 * t,
-                            y0 * (1 - t) + y1 * t,
-                            1.7 + 8 * (1 - t) ** 3,
+                            x0_ * (1 - t) + x1_ * t,
+                            y0_ * (1 - t) + y1_ * t,
+                            exponent(t),
                             steps,
-                            1.25,
+                            1,
                         )
                     )
                 )
@@ -94,92 +67,105 @@ def make_left_tubbing():
             for t in map(lambda x: x / steps, range(steps + 1))
         ]
     )
-
-    piece = s.rotate([180, 0, 0])(
-        s.translate([-0.6, 13.5, 0])(s.difference()(outer, inner))
+    # return tube
+    outer = s.union()(
+        tube,
+        union_block,
     )
+    # outer = tube
 
-    adapter_5020 = s.union()(piece, fan_adapter)
+    inner = chained_hull(
+        [
+            s.translate(transition(pos1, posT, pos_t, t))(
+                s.rotate(transition(rot1, rotT, rot_t, t))(
+                    section(
+                        x0 * (1 - t) + x1 * t,
+                        y0 * (1 - t) + y1 * t,
+                        exponent(t),
+                        steps,
+                        1.5,
+                    )
+                )
+            )
+            for t in map(lambda x: x / steps, range(steps + 1))
+        ]
+    )
+    return (s.difference()(outer, inner), inner)
 
-    return adapter_5020
 
-
-def make_right_tubbing():
-    x1 = 18.35 - 2 * outer_width
-    y1 = 11 - 2 * outer_width
+def make_left_tubbing(x0, y0, outer_width, steps):
+    x1 = 5 - outer_width
+    y1 = 14 - outer_width
 
     x0_ = x0 + outer_width
     y0_ = y0 + outer_width
     x1_ = x1 + outer_width
     y1_ = y1 + outer_width
 
-    pos1 = lambda t: [
-        0,
-        -13.5 * np.cos(np.pi / 2 * t**1.75),
-        10.15 * np.sin(np.pi / 2 * t**1.35),
+    pos1 = [0, 0, 0]
+    posT = [-35, -15, 20]
+    pos_t = lambda x, x1, t: [
+        x + x1 * np.sin(np.pi / 2 * t**1.95),
+        x
+        + x1 * np.sin(np.pi / 2 * t**1.95)
+        + (t**0.75 if t < 0.5 else (1 - t) ** 0.75) * 20
+        + t * -50 * np.exp(-5 * t),
+        x + x1 * np.sin(np.pi / 2 * t**1.15),
     ]
-    rot1 = lambda t: [-85 * t**2, 1.5 * t**2.5, 10 * t**2.5]
-    union_block = s.translate([-15, -25, -2.5])(  # block
-        s.hull()(
-            s.translate([0, 6.5, 2.5])(s.cube([15, 14.5, 10], center=False)),
-            s.translate([0, 2, 2])(
-                s.rotate([60, 0, 0])(s.cube([15, 10, 2], center=False))
-            ),
-        )
-    )
-    outer = s.union()(
-        chained_hull(
-            [
-                s.translate(pos1(t))(
-                    s.rotate(rot1(t))(
-                        s.translate([-4.5 * t, 0, 0])(
-                            section(
-                                x0_ * (1 - t) + x1_ * t,
-                                y0_ * (1 - t) + y1_ * t,
-                                1.7 + 8 * (1 - t) ** 4,
-                                steps,
-                                1,
-                            )
-                        )
-                    )
-                )
-                for t in map(lambda x: x / steps, range(steps + 1))
-            ]
-        ),
-        union_block,
+
+    rot1 = [0, 0, 0]
+    rotT = [0, -60, 55]
+    rot_t = lambda x, x1, t: [x + x1 * t**1, x + x1 * t**1, x + x1 * t**1]
+    return make_tubbing(
+        pos1, posT, pos_t, rot1, rotT, rot_t, x0, x0_, y0, y0_, x1, x1_, y1, y1_, steps
     )
 
-    inner = chained_hull(
-        [
-            s.translate(pos1(t))(
-                s.rotate(rot1(t))(
-                    s.translate([-4.5 * t, 0, 0])(
-                        section(
-                            x0 * (1 - t) + x1 * t,
-                            y0 * (1 - t) + y1 * t,
-                            1.7 + 8 * (1 - t) ** 3,
-                            steps,
-                            1.25,
-                        )
-                    )
-                )
-            )
-            for t in map(lambda x: x / steps, range(steps + 1))
-        ]
+
+def make_right_tubbing(x0, y0, outer_width, steps):
+    x1 = 5 - outer_width
+    y1 = 14 - outer_width
+
+    x0_ = x0 + outer_width
+    y0_ = y0 + outer_width
+    x1_ = x1 + outer_width
+    y1_ = y1 + outer_width
+
+    pos1 = [0, 0, 0]
+    posT = [-35, 0, 20]
+    pos_t = lambda x, x1, t: [
+        x + x1 * np.sin(np.pi / 2 * t**1.95),
+        x
+        + x1 * np.sin(np.pi / 2 * t**1.95)
+        + np.sin(-np.pi * t) * 10
+        + t * 35 * np.exp(-7.5 * t**2),
+        x + x1 * np.sin(np.pi / 2 * t**1.15),
+    ]
+
+    rot1 = [0, 0, 0]
+    rotT = [0, -60, -45]
+    rot_t = lambda x, x1, t: [x + x1 * t**1, x + x1 * t**1, x + x1 * t**1]
+    return make_tubbing(
+        pos1, posT, pos_t, rot1, rotT, rot_t, x0, x0_, y0, y0_, x1, x1_, y1, y1_, steps
     )
 
-    piece = s.rotate([180, 0, 0])(
-        s.translate([1, 14.25, 0])(s.difference()(outer, inner))
+
+def make_plate():
+    plate = s.translate([-7.5, 0, 0])(s.cube([55, 5, 45]))
+    screw = s.up(5)(s.cylinder(h=10, d=3.25, center=True, _fn=25))
+    screw_head = s.up(1.5)(s.cylinder(h=3.25, d=6, center=True, _fn=25))
+    plate_screw_hole = s.union()(screw, screw_head)
+    plate_screw_hole = s.rotate([-90, 0, 0])(plate_screw_hole)
+    plate = s.difference()(
+        plate,
+        s.translate([4.25, 0, 40.75])(plate_screw_hole),
+        s.translate([40, 0, 5.83])(plate_screw_hole),
     )
-
-    adapter_5020 = s.union()(piece, fan_adapter)
-
-    return adapter_5020
+    return plate
 
 
-if __name__ == "__main__":
+def make_shape():
     # tubing parameters
-    steps = 30
+    steps = 5
     x0 = 22.5 + 0.5
     y0 = 16.5 + 0.5
     outer_width = 2.5
@@ -206,7 +192,7 @@ if __name__ == "__main__":
         ),
     )
     # screw attachments
-    screw_hole = s.rotate([90, 0, 0])(s.cylinder(h=30, d=4.5, center=True, _fn=25))
+    screw_hole = s.rotate([90, 0, 0])(s.cylinder(h=30, d=4.5, center=True, _fn=_FN))
     fan_adapter = s.union()(
         fan_adapter,
         # vertical
@@ -231,37 +217,55 @@ if __name__ == "__main__":
     )
     fan_adapter = s.translate([0, 0, 7])(fan_adapter)
 
-    adapter_5020_left = make_left_tubbing()
-    adapter_5020_left = s.translate([5, -14, 11])(
-        s.rotate([0, 0, -90])(adapter_5020_left)
-    )
+    tube, inner_cut_left = make_left_tubbing(x0, y0, outer_width, steps)
+    rot = lambda sh: s.rotate([180, 0, 0])(sh)
+    piece = rot(tube)
+    inner_cut_left = rot(inner_cut_left)
+    adapter_5020_left = s.union()(piece, fan_adapter)
+    trans = lambda sh: s.translate([5, -14, 11])(s.rotate([0, 0, -90])(sh))
+    adapter_5020_left = trans(adapter_5020_left)
+    inner_cut_left = trans(inner_cut_left)
 
-    adapter_5020_right = s.mirror([0, 1, 0])(make_right_tubbing())
-    adapter_5020_right = s.translate([42.5, -14, 11])(
-        s.rotate([0, 0, -90])(adapter_5020_right)
-    )
-
+    plate = make_plate()
+    tube, inner_cut_right = make_right_tubbing(x0, y0, outer_width, steps)
+    rot = lambda sh: s.rotate(180, 0, 0)(sh)
+    adapter_5020_right = rot(tube)
+    inner_cut_right = rot(inner_cut_right)
+    adapter_5020_right = s.union()(adapter_5020_right, fan_adapter)
+    trans = lambda sh: s.translate([41, -14, 11])(s.rotate([0, 0, -90])(sh))
+    adapter_5020_right = trans(adapter_5020_right)
+    inner_cut_right = trans(inner_cut_right)
     screw_cut = s.translate([40, -15, 6])(
-        s.rotate([90, 0, 0])(s.cylinder(2.75, 30, _fn=25, center=True))
+        s.rotate([90, 0, 0])(s.cylinder(r=2.75, h=35, _fn=25, center=True))
     )
     adapter_5020_right = s.difference()(adapter_5020_right, screw_cut)
 
-    duct = s.import_stl("./X2_Fan_Mod_Vibe.stl")
-    duct = s.difference()(
-        duct,
-        s.translate([-6.5, -25, -10])(s.cube([61, 25, 35], center=False)),
-        # left tubbing cut
-        s.translate([-9.65, -20, -5])(
-            s.rotate([0, -4, -10])(s.cube([5, 20, 15], center=False))
-        ),
-        # right tubbing cut
-        s.translate([52.5, -21, -5])(
-            s.rotate([0, 4, 10])(s.cube([5, 20, 15], center=False))
-        ),
-        # bottom
-        s.translate([55, 35, -19.6])(s.cube([20, 20, 10], center=True)),
-    )
-    piece = s.union()(adapter_5020_left, adapter_5020_right, duct)
-    # piece = s.difference()(piece, s.translate([-5,-100,-100])(s.cube([57,200,200], center=False)))
+    # duct = s.import_stl("./X2_Fan_Mod_Vibe.stl")
+    # duct = s.difference()(
+    #     duct,
+    #     s.translate([-6.5, -25, -10])(s.cube([61, 25, 35], center=False)),
+    #     # left tubbing cut
+    #     s.translate([-9.65, -20, -5])(
+    #         s.rotate([0, -4, -10])(s.cube([5, 20, 15], center=False))
+    #     ),
+    #     # right tubbing cut
+    #     s.translate([52.5, -21, -5])(
+    #         s.rotate([0, 4, 10])(s.cube([5, 20, 15], center=False))
+    #     ),
+    #     # bottom
+    #     s.translate([55, 35, -19.6])(s.cube([20, 20, 10], center=True)),
+    # )
+    # piece = s.union()(adapter_5020_left, plate, adapter_5020_right, duct)
+    piece = s.union()(adapter_5020_left, plate, adapter_5020_right)
+    piece = s.difference()(piece, inner_cut_right, inner_cut_left, screw_cut)
 
+    # extruder = s.translate(30, 25, -10)(s.cylinder(d=5, h=10, center=True))
+    # piece = s.union()(piece, extruder)
+    # piece = s.difference()(piece, s.translate([-5,-100,-100])(s.cube([57,200,200], center=False)))
+    return piece
+
+
+if __name__ == "__main__":
+    piece = make_shape()
     s.scad_render_to_file(piece, "5020_dual_duct.scad")
+# %%
