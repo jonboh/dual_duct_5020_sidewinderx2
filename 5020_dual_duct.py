@@ -49,7 +49,7 @@ def make_tubbing(
         )
     )
     np.arange
-    exponent = lambda t: 8
+    exponent = lambda t: 8 if 0 < t < 0.25 else 1.5 if 0.25 < t < 0.75 else 8
     tube = chained_hull(
         [
             (
@@ -95,23 +95,27 @@ def make_tubbing(
 
 
 def make_left_tubbing(x0, y0, outer_width, steps):
-    x1 = 5 - outer_width
-    y1 = 17 - outer_width
+    # 18x23
+    x1 = 12 - outer_width
+    y1 = 33 - outer_width
 
     x0_ = x0 + outer_width
     y0_ = y0 + outer_width
-    x1_ = x1 + outer_width
-    y1_ = y1 + outer_width
+    x1_ = x1 + outer_width / 1.25
+    y1_ = y1 + outer_width / 1.25
 
     pos1 = [0, 0, 0]
-    posT = [-37, -15, 20]
+    posT = [-34, -15, 20]
     pos_t = lambda x, x1, t: [
-        x + x1 * np.sin(np.pi / 2 * t**1.95),
+        x + x1 * np.sin(np.pi / 2 * t**2.45),
         x
         + x1 * np.sin(np.pi / 2 * t**1.95)
-        + (t**0.75 if t < 0.5 else (1 - t) ** 0.75) * 30
+        + (t**0.75 if t < 0.5 else (1 - t) ** 0.75) * 35
         + t * -55 * np.exp(-5 * t**1.75),
-        x + x1 * np.sin(np.pi / 2 * t**1.75),
+        x
+        + x1 * (np.sin(np.pi / 2 * t**0.90))
+        + (t * -20 * np.exp(-5 * (t) ** 1.75) if t > 0.5 else 0)
+        + (t * -20 * np.exp(-5 * (t) ** 4) if t > 0.75 else 0),
     ]
 
     rot1 = [0, 0, 0]
@@ -123,27 +127,30 @@ def make_left_tubbing(x0, y0, outer_width, steps):
 
 
 def make_right_tubbing(x0, y0, outer_width, steps):
-    x1 = 5 - outer_width
-    y1 = 17 - outer_width
+    x1 = 12 - outer_width
+    y1 = 30 - outer_width
 
     x0_ = x0 + outer_width
     y0_ = y0 + outer_width
-    x1_ = x1 + outer_width
-    y1_ = y1 + outer_width
+    x1_ = x1 + outer_width / 1.25
+    y1_ = y1 + outer_width / 1.25
 
     pos1 = [0, 0, 0]
-    posT = [-35, 2.5, 20]
+    posT = [-28, 1.5, 20]
     pos_t = lambda x, x1, t: [
-        x + x1 * np.sin(np.pi / 2 * t**2),
+        x + x1 * np.sin(np.pi / 2 * t**2.45),
         x
         + x1 * np.sin(np.pi / 2 * t**1.95)
         + np.sin(-np.pi * t) * 10
-        + t * 35 * np.exp(-7.5 * t**2.5),
-        x + x1 * np.sin(np.pi / 2 * t**1.25),
+        + t * 35 * np.exp(-6.5 * t**2.5),
+        x
+        + x1 * np.sin(np.pi / 2 * t**0.925)
+        + (t * -20 * np.exp(-5 * (t) ** 1.75) if t > 0.5 else 0)
+        + (t * -10 * np.exp(-5 * (t) ** 4) if t > 0.75 else 0),
     ]
 
     rot1 = [0, 0, 0]
-    rotT = [0, -30, -45]
+    rotT = [0, -30, -30]
     rot_t = lambda x, x1, t: [x + x1 * t**1, x + x1 * t**1.5, x + x1 * t**1]
     return make_tubbing(
         pos1, posT, pos_t, rot1, rotT, rot_t, x0, x0_, y0, y0_, x1, x1_, y1, y1_, steps
@@ -161,7 +168,8 @@ def make_plate():
         s.translate([40, 0, 5.83])(screw_hole),
     )
     plate = s.difference()(plate, screw_holes)
-    return plate, screw_holes
+    plate_clearance_cutter = s.translate(-30, 5, 0)(s.cube(100, 100, 100))
+    return plate, screw_holes, plate_clearance_cutter
 
 
 def make_shape():
@@ -169,7 +177,7 @@ def make_shape():
     steps = 5
     x0 = 22.5 + 0.5
     y0 = 16.5 + 0.5
-    outer_width = 3.5
+    outer_width = 6
 
     # fan coupling
     fan_adapter = s.difference()(
@@ -227,7 +235,7 @@ def make_shape():
     adapter_5020_left = trans(adapter_5020_left)
     inner_cut_left = trans(inner_cut_left)
 
-    plate, screw_hole = make_plate()
+    plate, screw_hole, plate_clearance_cutter = make_plate()
     tube, inner_cut_right = make_right_tubbing(x0, y0, outer_width, steps)
     rot = lambda sh: s.rotate(180, 0, 0)(sh)
     adapter_5020_right = rot(tube)
@@ -237,10 +245,9 @@ def make_shape():
     adapter_5020_right = trans(adapter_5020_right)
     inner_cut_right = trans(inner_cut_right)
     screw_cut = s.translate([40, -15, 6])(
-        s.rotate([90, 0, 0])(s.cylinder(r=2.5, h=35, _fn=25, center=True))
+        s.rotate([90, 0, 0])(s.cylinder(r=3, h=35, _fn=25, center=True))
     )
-    adapter_5020_right = s.difference()(adapter_5020_right, screw_cut)
-
+    # adapter_5020_right = s.difference()(adapter_5020_right, screw_cut)
     # duct = s.difference()(
     #     s.import_stl("./X2_Fan_Mod_Vibe.stl"),
     #     s.translate([-6.5, -25, -10])(s.cube([61, 25, 35], center=False)),
@@ -258,7 +265,12 @@ def make_shape():
     # piece = s.union()(adapter_5020_left, plate, adapter_5020_right, duct)
     piece = s.union()(adapter_5020_left, plate, adapter_5020_right)
     piece = s.difference()(
-        piece, inner_cut_right, inner_cut_left, screw_cut, screw_hole
+        piece,
+        inner_cut_right,
+        inner_cut_left,
+        screw_cut,
+        screw_hole,
+        plate_clearance_cutter,
     )
 
     # extruder = s.translate(30, 25, -10)(s.cylinder(d=5, h=10, center=True))
